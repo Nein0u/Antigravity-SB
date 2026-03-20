@@ -136,7 +136,7 @@ function createFallbackImage(description: string, index: number): string {
   <rect width="1280" height="720" fill="url(#bg)"/>
   <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
   <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
-    StoryAI Placeholder
+    StoriAI Placeholder
   </text>
   <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
     Frame ${index + 1}
