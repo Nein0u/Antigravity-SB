@@ -67,7 +67,7 @@ export function useGenerator() {
             }));
 
             // Step 1.5: Generate Project DNA
-            const dna = await generateProjectDNA(script);
+            const dna = await generateProjectDNA(script, signal);
             if (signal.aborted) return;
 
             setState((prev) => ({
@@ -81,12 +81,6 @@ export function useGenerator() {
             for (let i = 0; i < newTotalFrames; i++) {
 
                 if (signal.aborted) return;
-
-                // In step mode, pause after each frame except the first trigger
-                if (state.mode === 'step' && i > 0) {
-                    await waitForContinue();
-                    if (signal.aborted) return;
-                }
 
                 setState((prev) => ({
                     ...prev,
@@ -122,7 +116,7 @@ export function useGenerator() {
                     };
                 });
 
-                // In step mode, pause after generating frame (except if it's the last)
+                // In step mode, pause after generating each frame (except the last)
                 if (state.mode === 'step' && i < newTotalFrames - 1) {
                     await waitForContinue();
                     if (signal.aborted) return;
@@ -140,10 +134,10 @@ export function useGenerator() {
             if (e instanceof Error && e.name === 'AbortError') return;
             setPartialState({
                 status: 'idle',
-                currentAction: 'An error occurred. Please try again.',
+                currentAction: e instanceof Error ? e.message : 'An error occurred. Please try again.',
             });
         }
-    }, [state.input, state.inputMode, state.mode, state.totalFrames, waitForContinue, setPartialState]);
+    }, [state.input, state.inputMode, state.mode, waitForContinue, setPartialState]);
 
     const handleContinue = useCallback(() => {
         if (continueSignalRef.current) {
@@ -154,6 +148,7 @@ export function useGenerator() {
 
     const handleStop = useCallback(() => {
         abortRef.current?.abort();
+        continueSignalRef.current?.();
         continueSignalRef.current = null;
         setPartialState({
             status: 'stopped',

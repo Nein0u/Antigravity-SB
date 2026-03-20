@@ -1,16 +1,150 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(API_KEY);
-// Using gemini-2.5-flash which is confirmed to work with this API key
-export const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL;
+const FORCE_IMAGE_FALLBACK = import.meta.env.VITE_FORCE_IMAGE_FALLBACK === 'true';
+let imageModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
+
+function getImageModel() {
+    if (!API_KEY) {
+        throw new Error('Missing VITE_GEMINI_API_KEY. Configure your environment before using AI services.');
+    }
+    if (!imageModel) {
+        const client = new GoogleGenerativeAI(API_KEY);
+        // Using imagen-3.0-generate-001 for image generation
+        imageModel = client.getGenerativeModel({ model: "imagen-3.0-generate-001" });
+    }
+    return imageModel;
+}
 
 export interface AIScriptResult {
     text: string;
     frames: string[];
 }
 
-export async function generateAIScript(input: string, mode: 'script' | 'idea'): Promise<AIScriptResult> {
+function createAbortError() {
+    return new DOMException('Aborted', 'AbortError');
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+    if (signal?.aborted) throw createAbortError();
+}
+
+async function withAbort<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return operation();
+    throwIfAborted(signal);
+
+    let onAbort: (() => void) | null = null;
+    const abortPromise = new Promise<T>((_, reject) => {
+        onAbort = () => reject(createAbortError());
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+
+    try {
+        const runningOperation = operation();
+        return await Promise.race([runningOperation, abortPromise]);
+    } finally {
+        if (onAbort) signal.removeEventListener('abort', onAbort);
+    }
+}
+
+async function directGeminiText(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (!API_KEY) {
+        throw new Error('Missing VITE_GEMINI_API_KEY. Configure your environment before using AI services.');
+    }
+
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${API_KEY}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [{ text: prompt }],
+                    },
+                ],
+            }),
+            signal,
+        }
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Gemini API returned an empty response.');
+    return text;
+}
+
+async function proxyGeminiText(prompt: string, signal?: AbortSignal): Promise<string> {
+    const response = await fetch(PROXY_URL!, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+        signal,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Proxy Gemini error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (!data?.text) throw new Error('Proxy Gemini returned an empty response.');
+    return data.text;
+}
+
+async function generateText(prompt: string, signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
+    if (PROXY_URL) return await proxyGeminiText(prompt, signal);
+    return await directGeminiText(prompt, signal);
+}
+
+function createFallbackImage(description: string, index: number): string {
+    const safeText = (description || `Frame ${index + 1}`)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 90);
+
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
+  <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
+    StoryAI Placeholder
+  </text>
+  <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
+    Frame ${index + 1}
+  </text>
+  <foreignObject x="80" y="250" width="1120" height="340">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="color:#d4d4d8;font-size:26px;line-height:1.4;font-family:Inter,Arial,sans-serif;">
+      ${safeText}
+    </div>
+  </foreignObject>
+</svg>`;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+export async function generateAIScript(
+    input: string,
+    mode: 'script' | 'idea',
+    signal?: AbortSignal
+): Promise<AIScriptResult> {
+    throwIfAborted(signal);
+
     if (mode === 'script') {
         const prompt = `
             You are a professional storyboard writer. 
@@ -23,8 +157,7 @@ export async function generateAIScript(input: string, mode: 'script' | 'idea'): 
             ${input}
         `;
         
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
+        const text = await generateText(prompt, signal);
         const frames = text.split(/\n\s*\n/).map((s: string) => s.trim()).filter(Boolean);
         
         return {
@@ -44,8 +177,7 @@ export async function generateAIScript(input: string, mode: 'script' | 'idea'): 
             ${input}
         `;
         
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
+        const text = await generateText(prompt, signal);
         const frames = text.split(/\n\s*\n/).map((s: string) => s.trim()).filter(Boolean);
         
         return {
@@ -55,7 +187,8 @@ export async function generateAIScript(input: string, mode: 'script' | 'idea'): 
     }
 }
 
-export async function generateProjectDNA(script: string): Promise<string> {
+export async function generateProjectDNA(script: string, signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     const prompt = `
         You are a visual director and concept artist. 
         Analyze the following storyboard script and create a "Project DNA" — a concise visual blueprint 
@@ -72,11 +205,11 @@ export async function generateProjectDNA(script: string): Promise<string> {
         ${script}
     `;
     
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    return (await generateText(prompt, signal)).trim();
 }
 
-export async function enhanceAIPrompt(description: string, dna: string = ''): Promise<string> {
+export async function enhanceAIPrompt(description: string, dna: string = '', signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     const prompt = `
         You are an expert AI image prompt engineer for cinematic storyboards.
         Take the following scene description and the "Project DNA" (visual consistency guide) 
@@ -93,27 +226,33 @@ export async function enhanceAIPrompt(description: string, dna: string = ''): Pr
         Return ONLY the enhanced prompt.
     `;
     
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    return (await generateText(prompt, signal)).trim();
 }
-
-// Using imagen-3.0-generate-001 for image generation
-export const imageModel = genAI.getGenerativeModel({ model: "imagen-3.0-generate-001" });
 
 /**
  * Generates an image using Gemini/Imagen.
  * Falls back to placeholder if generation fails for better stability during evaluation.
  */
-export async function generateAIImage(description: string, index: number, dna: string = ''): Promise<string> {
+export async function generateAIImage(
+    description: string,
+    index: number,
+    dna: string = '',
+    signal?: AbortSignal
+): Promise<string> {
+    throwIfAborted(signal);
+    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+
     try {
         // First enhance the prompt if DNA is provided
-        const finalPrompt = dna ? await enhanceAIPrompt(description, dna) : description;
+        const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
+        throwIfAborted(signal);
         
         // Use the image model
         // Note: In some SDK versions, generation might be different. 
         // We'll wrap it in a way that attempts a standard generation call.
-        const result = await imageModel.generateContent(finalPrompt);
+        const result = await withAbort(() => getImageModel().generateContent(finalPrompt), signal);
         const response = await result.response;
+        throwIfAborted(signal);
         
         // Handle image data in response
         const part = response.candidates?.[0]?.content?.parts?.[0];
@@ -127,16 +266,10 @@ export async function generateAIImage(description: string, index: number, dna: s
             return textResponse;
         }
     } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') throw error;
         console.error("AI Image Generation failed:", error);
     }
 
-    // Fallback logic (refined to use prompt keywords for better (though still limited) relevance)
-    const seed = index * 13 + Date.now() % 1000;
-    const cleanDescription = description.replace(/[^\w\s]/gi, '');
-    const words = cleanDescription.split(/\W+/).filter(w => w.length > 4);
-    const keyword = words.length > 0 ? words[seed % words.length].toLowerCase() : 'cinematic';
-    
-    // Using a slightly better source for placeholders that supports keywords
-    return `https://source.unsplash.com/featured/640x360?${keyword},cinematic&sig=${seed}`;
+    // Local SVG fallback to avoid third-party hotlink/CORS/rate-limit failures in production.
+    return createFallbackImage(description, index);
 }
-
