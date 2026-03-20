@@ -14,6 +14,9 @@ If Gemini works locally but fails with HTTP 400 in production, configure one of 
    - Set `VITE_GEMINI_PROXY_URL=/api/gemini` in Vercel env vars.  
    - The app will call `api/gemini.js` and avoid exposing the raw key in frontend bundles.
 
+Debug option:
+- Set `VITE_FORCE_IMAGE_FALLBACK=true` to force local SVG placeholders and verify storyboard rendering even when image providers fail.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

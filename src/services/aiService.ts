@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL;
+const FORCE_IMAGE_FALLBACK = import.meta.env.VITE_FORCE_IMAGE_FALLBACK === 'true';
 let imageModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
 
 function getImageModel() {
@@ -239,6 +240,8 @@ export async function generateAIImage(
     signal?: AbortSignal
 ): Promise<string> {
     throwIfAborted(signal);
+    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+
     try {
         // First enhance the prompt if DNA is provided
         const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
