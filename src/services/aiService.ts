@@ -105,6 +105,38 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
     return await directGeminiText(prompt, signal);
 }
 
+function createFallbackImage(description: string, index: number): string {
+    const safeText = (description || `Frame ${index + 1}`)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 90);
+
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
+  <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
+    StoryAI Placeholder
+  </text>
+  <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
+    Frame ${index + 1}
+  </text>
+  <foreignObject x="80" y="250" width="1120" height="340">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="color:#d4d4d8;font-size:26px;line-height:1.4;font-family:Inter,Arial,sans-serif;">
+      ${safeText}
+    </div>
+  </foreignObject>
+</svg>`;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export async function generateAIScript(
     input: string,
     mode: 'script' | 'idea',
@@ -235,12 +267,6 @@ export async function generateAIImage(
         console.error("AI Image Generation failed:", error);
     }
 
-    // Fallback logic (refined to use prompt keywords for better (though still limited) relevance)
-    const seed = index * 13 + Date.now() % 1000;
-    const cleanDescription = description.replace(/[^\w\s]/gi, '');
-    const words = cleanDescription.split(/\W+/).filter(w => w.length > 4);
-    const keyword = words.length > 0 ? words[seed % words.length].toLowerCase() : 'cinematic';
-    
-    // Using a slightly better source for placeholders that supports keywords
-    return `https://source.unsplash.com/featured/640x360?${keyword},cinematic&sig=${seed}`;
+    // Local SVG fallback to avoid third-party hotlink/CORS/rate-limit failures in production.
+    return createFallbackImage(description, index);
 }
