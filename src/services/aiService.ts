@@ -124,6 +124,12 @@ function createFallbackImage(description: string, index: number): string {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 90);
+    const escapedText = safeText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
@@ -141,11 +147,9 @@ function createFallbackImage(description: string, index: number): string {
   <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
     Frame ${index + 1}
   </text>
-  <foreignObject x="80" y="250" width="1120" height="340">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="color:#d4d4d8;font-size:26px;line-height:1.4;font-family:Inter,Arial,sans-serif;">
-      ${safeText}
-    </div>
-  </foreignObject>
+  <text x="80" y="280" fill="#d4d4d8" font-size="26" font-family="Inter, Arial, sans-serif">
+    ${escapedText}
+  </text>
 </svg>`;
 
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
