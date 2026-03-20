@@ -48,6 +48,8 @@ const FrameCard: React.FC<{ frame: StoryboardFrame; idx: number; onClick: () => 
                             src={frame.imageUrl}
                             alt={`Frame ${frame.index + 1}`}
                             className="card-img"
+                            loading="lazy"
+                            decoding="async"
                             style={{ opacity: imgLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
                             onLoad={() => setImgLoaded(true)}
                             onError={() => setImgError(true)}

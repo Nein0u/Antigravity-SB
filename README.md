@@ -2,6 +2,18 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Gemini configuration (Vercel / Production)
+
+If Gemini works locally but fails with HTTP 400 in production, configure one of these options:
+
+1. **Frontend direct key (less secure)**  
+   Set `VITE_GEMINI_API_KEY` in Vercel project env vars (available at build time).
+
+2. **Recommended: server proxy (more secure)**  
+   - Set `GEMINI_API_KEY` in Vercel project env vars (server-side only).  
+   - Set `VITE_GEMINI_PROXY_URL=/api/gemini` in Vercel env vars.  
+   - The app will call `api/gemini.js` and avoid exposing the raw key in frontend bundles.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
