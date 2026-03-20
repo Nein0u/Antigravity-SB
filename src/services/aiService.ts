@@ -3,7 +3,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL;
-const FORCE_IMAGE_FALLBACK = import.meta.env.VITE_FORCE_IMAGE_FALLBACK === 'true';
 let imageModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
 
 function getImageModel() {
@@ -104,38 +103,6 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
     throwIfAborted(signal);
     if (PROXY_URL) return await proxyGeminiText(prompt, signal);
     return await directGeminiText(prompt, signal);
-}
-
-function createFallbackImage(description: string, index: number): string {
-    const safeText = (description || `Frame ${index + 1}`)
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 90);
-
-    const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#18181b"/>
-      <stop offset="100%" stop-color="#0f172a"/>
-    </linearGradient>
-  </defs>
-  <rect width="1280" height="720" fill="url(#bg)"/>
-  <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
-  <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
-    StoryAI Placeholder
-  </text>
-  <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
-    Frame ${index + 1}
-  </text>
-  <foreignObject x="80" y="250" width="1120" height="340">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="color:#d4d4d8;font-size:26px;line-height:1.4;font-family:Inter,Arial,sans-serif;">
-      ${safeText}
-    </div>
-  </foreignObject>
-</svg>`;
-
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export async function generateAIScript(
@@ -240,8 +207,6 @@ export async function generateAIImage(
     signal?: AbortSignal
 ): Promise<string> {
     throwIfAborted(signal);
-    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
-
     try {
         // First enhance the prompt if DNA is provided
         const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
