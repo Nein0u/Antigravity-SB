@@ -235,12 +235,6 @@ export async function generateAIImage(
         console.error("AI Image Generation failed:", error);
     }
 
-    // Fallback logic (refined to use prompt keywords for better (though still limited) relevance)
-    const seed = index * 13 + Date.now() % 1000;
-    const cleanDescription = description.replace(/[^\w\s]/gi, '');
-    const words = cleanDescription.split(/\W+/).filter(w => w.length > 4);
-    const keyword = words.length > 0 ? words[seed % words.length].toLowerCase() : 'cinematic';
-    
-    // Using a slightly better source for placeholders that supports keywords
-    return `https://source.unsplash.com/featured/640x360?${keyword},cinematic&sig=${seed}`;
+    // Local SVG fallback to avoid third-party hotlink/CORS/rate-limit failures in production.
+    return createFallbackImage(description, index);
 }
