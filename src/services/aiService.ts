@@ -1,13 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL;
+const RAW_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = RAW_API_KEY && RAW_API_KEY !== 'undefined' && RAW_API_KEY !== 'null' ? RAW_API_KEY : '';
+const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL || (!API_KEY ? '/api/gemini' : '');
+const FORCE_IMAGE_FALLBACK = import.meta.env.VITE_FORCE_IMAGE_FALLBACK === 'true';
 let imageModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
 
 function getImageModel() {
     if (!API_KEY) {
-        throw new Error('Missing VITE_GEMINI_API_KEY. Configure your environment before using AI services.');
+        throw new Error('Missing VITE_GEMINI_API_KEY. Configure it, or force fallback images with VITE_FORCE_IMAGE_FALLBACK=true.');
     }
     if (!imageModel) {
         const client = new GoogleGenerativeAI(API_KEY);
@@ -50,7 +52,7 @@ async function withAbort<T>(operation: () => Promise<T>, signal?: AbortSignal): 
 
 async function directGeminiText(prompt: string, signal?: AbortSignal): Promise<string> {
     if (!API_KEY) {
-        throw new Error('Missing VITE_GEMINI_API_KEY. Configure your environment before using AI services.');
+        throw new Error('Missing VITE_GEMINI_API_KEY. Configure it, or set VITE_GEMINI_PROXY_URL=/api/gemini with server GEMINI_API_KEY.');
     }
 
     const response = await fetch(
@@ -101,8 +103,56 @@ async function proxyGeminiText(prompt: string, signal?: AbortSignal): Promise<st
 
 async function generateText(prompt: string, signal?: AbortSignal): Promise<string> {
     throwIfAborted(signal);
-    if (PROXY_URL) return await proxyGeminiText(prompt, signal);
+    if (PROXY_URL) {
+        try {
+            return await proxyGeminiText(prompt, signal);
+        } catch (proxyError) {
+            if (!API_KEY) {
+                const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy error';
+                throw new Error(`Gemini proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
+            }
+        }
+    }
+    if (!API_KEY) {
+        throw new Error('Missing VITE_GEMINI_API_KEY. Configure it, or set VITE_GEMINI_PROXY_URL=/api/gemini with server GEMINI_API_KEY.');
+    }
     return await directGeminiText(prompt, signal);
+}
+
+function createFallbackImage(description: string, index: number): string {
+    const safeText = (description || `Frame ${index + 1}`)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 90);
+    const escapedText = safeText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
+  <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
+    StoriAI Placeholder
+  </text>
+  <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
+    Frame ${index + 1}
+  </text>
+  <text x="80" y="280" fill="#d4d4d8" font-size="26" font-family="Inter, Arial, sans-serif">
+    ${escapedText}
+  </text>
+</svg>`;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export async function generateAIScript(
@@ -207,6 +257,9 @@ export async function generateAIImage(
     signal?: AbortSignal
 ): Promise<string> {
     throwIfAborted(signal);
+    if (!API_KEY) return createFallbackImage(description, index);
+    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+
     try {
         // First enhance the prompt if DNA is provided
         const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;

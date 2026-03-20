@@ -10,9 +10,14 @@ If Gemini works locally but fails with HTTP 400 in production, configure one of 
    Set `VITE_GEMINI_API_KEY` in Vercel project env vars (available at build time).
 
 2. **Recommended: server proxy (more secure)**  
-   - Set `GEMINI_API_KEY` in Vercel project env vars (server-side only).  
-   - Set `VITE_GEMINI_PROXY_URL=/api/gemini` in Vercel env vars.  
+   - Set `GEMINI_API_KEY` in Vercel project env vars (server-side only, preferred).  
+   - Alternatively, server proxy also accepts `GOOGLE_API_KEY`.  
+   - Optional: set `VITE_GEMINI_PROXY_URL=/api/gemini` in Vercel env vars.  
+   - If `VITE_GEMINI_API_KEY` is missing, the app now auto-uses `/api/gemini` by default.
    - The app will call `api/gemini.js` and avoid exposing the raw key in frontend bundles.
+
+Debug option:
+- Set `VITE_FORCE_IMAGE_FALLBACK=true` to force local SVG placeholders and verify storyboard rendering even when image providers fail.
 
 Currently, two official plugins are available:
 

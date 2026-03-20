@@ -6,9 +6,15 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: 'Missing GEMINI_API_KEY on server' });
+    res.status(500).json({
+      error:
+        'Missing server API key. Set GEMINI_API_KEY (preferred) or GOOGLE_API_KEY in Vercel project settings.',
+    });
     return;
   }
 
