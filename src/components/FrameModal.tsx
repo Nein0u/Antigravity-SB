@@ -21,6 +21,17 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
         }
     }, [frame]);
 
+    React.useEffect(() => {
+        if (!frame) return;
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [frame, onClose]);
+
     if (!frame) return null;
 
     const handleEnhance = async () => {
@@ -53,7 +64,7 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `StoryAI-Frame-${frame.index + 1}.jpg`;
+            link.download = `Fernando-Frame-${frame.index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -61,7 +72,8 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
         } catch (error) {
             console.error('Error downloading image:', error);
             // Fallback: open in new tab if fetch fails due to CORS
-            window.open(frame.imageUrl, '_blank');
+            const popup = window.open(frame.imageUrl, '_blank', 'noopener,noreferrer');
+            if (popup) popup.opener = null;
         }
     };
 
@@ -77,6 +89,9 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
                 <div className="modal-container" onClick={(e) => e.stopPropagation()}>
                     <motion.div
                         className="modal-content"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="frame-modal-title"
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -85,7 +100,7 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
                         {/* Header */}
                         <div className="modal-header">
                             <div>
-                                <h3 className="modal-title">Edit Frame {frame.index + 1}</h3>
+                                <h3 id="frame-modal-title" className="modal-title">Edit Frame {frame.index + 1}</h3>
                                 <p className="modal-sub">Refine the AI prompt or add photographic directions.</p>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>

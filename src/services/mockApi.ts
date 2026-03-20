@@ -14,13 +14,13 @@ export interface ScriptResult {
 export async function generateScript(
     input: string,
     mode: 'script' | 'idea',
-    _signal?: AbortSignal
+    signal?: AbortSignal
 ): Promise<ScriptResult> {
-    return await generateAIScript(input, mode);
+    return await generateAIScript(input, mode, signal);
 }
 
-export async function generateProjectDNA(script: string): Promise<string> {
-    return await aiGenerateProjectDNA(script);
+export async function generateProjectDNA(script: string, signal?: AbortSignal): Promise<string> {
+    return await aiGenerateProjectDNA(script, signal);
 }
 
 export async function generateFrame(
@@ -29,7 +29,7 @@ export async function generateFrame(
     dna: string = '',
     signal?: AbortSignal
 ): Promise<StoryboardFrame> {
-    const imageUrl = await generateAIImage(description, index, dna);
+    const imageUrl = await generateAIImage(description, index, dna, signal);
     
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -45,10 +45,10 @@ export async function generateFrame(
 
 export async function enhancePrompt(
     description: string,
-    _currentPrompt: string,
+    currentPrompt: string,
     dna: string = '',
-    _signal?: AbortSignal
+    signal?: AbortSignal
 ): Promise<string> {
-    return await aiEnhancePrompt(description, dna);
+    const sourceText = currentPrompt?.trim() ? `${description}\n\nCurrent prompt:\n${currentPrompt}` : description;
+    return await aiEnhancePrompt(sourceText, dna, signal);
 }
-

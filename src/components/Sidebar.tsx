@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <Film size={18} className="text-emerald-400" />
                 </div>
                 <div>
-                    <h1 className="brand-title">StoryAI</h1>
+                    <h1 className="brand-title">Fernando</h1>
                     <p className="brand-sub">Storyboard Generator</p>
                 </div>
             </div>

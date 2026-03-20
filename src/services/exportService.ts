@@ -32,7 +32,7 @@ export async function downloadComposite(frames: StoryboardFrame[], title: string
     // Header
     ctx.fillStyle = '#10b981'; // Emerald-400
     ctx.font = 'bold 40px Inter, sans-serif';
-    ctx.fillText('STORYAI | COMPOSITE CONTACT SHEET', PADDING, PADDING + 30);
+    ctx.fillText('FERNANDO | COMPOSITE CONTACT SHEET', PADDING, PADDING + 30);
     
     ctx.fillStyle = '#a1a1aa'; // Zinc-400
     ctx.font = '24px Inter, sans-serif';
@@ -93,7 +93,7 @@ export async function downloadComposite(frames: StoryboardFrame[], title: string
 /**
  * Downloads the storyboard data as a JSON file.
  */
-export function downloadJSON(data: any, title: string = 'storyboard-project') {
+export function downloadJSON<T>(data: T, title: string = 'storyboard-project') {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
