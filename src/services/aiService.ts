@@ -340,6 +340,12 @@ export async function generateAIImage(
         const finalPrompt = dna?.trim()
             ? `Project DNA:\n${dna}\n\nScene:\n${description}\n\nGenerate a cinematic storyboard frame image that matches the DNA.`
             : description;
+    if (!API_KEY) return createFallbackImage(description, index);
+    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+
+    try {
+        // First enhance the prompt if DNA is provided
+        const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
         throwIfAborted(signal);
         
         return await withAbort(() => generateImageWithGemini(finalPrompt, signal), signal);

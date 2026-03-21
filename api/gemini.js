@@ -1,5 +1,6 @@
 const GEMINI_TEXT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 const GEMINI_IMAGE_MODELS = ['gemini-2.0-flash-preview-image-generation'];
+const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -100,6 +101,25 @@ export default async function handler(req, res) {
       }
 
       res.status(502).json({ error: 'Gemini image response did not include image data.' });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      res.status(response.status).json(data);
       return;
     }
 
