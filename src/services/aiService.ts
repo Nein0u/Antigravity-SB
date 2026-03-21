@@ -87,6 +87,30 @@ async function proxyGeminiText(prompt: string, signal?: AbortSignal): Promise<st
     return data.text;
 }
 
+async function proxyGeminiImage(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (!PROXY_URL) {
+        throw new Error('Gemini image proxy URL is not configured.');
+    }
+
+    const response = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, type: 'image' }),
+        signal,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Proxy Gemini image error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (!data?.imageData || typeof data.imageData !== 'string') {
+        throw new Error('Proxy Gemini image response did not include imageData.');
+    }
+    return data.imageData;
+}
+
 async function generateText(prompt: string, signal?: AbortSignal): Promise<string> {
     throwIfAborted(signal);
     if (PROXY_URL) {
@@ -95,6 +119,9 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
         } catch (proxyError) {
             if (!API_KEY) {
                 const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy error';
+                if (details.includes('429')) {
+                    throw new Error(`Gemini proxy quota exceeded (429). Configure billing/higher quota or set VITE_GEMINI_API_KEY as direct fallback. ${details}`);
+                }
                 throw new Error(`Gemini proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
             }
         }
@@ -106,6 +133,20 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
 }
 
 async function generateImageWithGemini(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (PROXY_URL) {
+        try {
+            return await proxyGeminiImage(prompt, signal);
+        } catch (proxyError) {
+            if (!API_KEY) {
+                const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy image error';
+                if (details.includes('429')) {
+                    throw new Error(`Gemini image proxy quota exceeded (429). Configure billing/higher quota or set VITE_GEMINI_API_KEY as direct fallback. ${details}`);
+                }
+                throw new Error(`Gemini image proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
+            }
+        }
+    }
+
     if (!API_KEY) {
         throw new Error('Missing VITE_GEMINI_API_KEY for image generation.');
     }
@@ -292,6 +333,13 @@ export async function generateAIImage(
     signal?: AbortSignal
 ): Promise<string> {
     throwIfAborted(signal);
+    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+
+    try {
+        // Avoid extra text-model calls per frame (can exhaust free quota quickly).
+        const finalPrompt = dna?.trim()
+            ? `Project DNA:\n${dna}\n\nScene:\n${description}\n\nGenerate a cinematic storyboard frame image that matches the DNA.`
+            : description;
     if (!API_KEY) return createFallbackImage(description, index);
     if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
 
