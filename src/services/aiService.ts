@@ -119,6 +119,9 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
         } catch (proxyError) {
             if (!API_KEY) {
                 const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy error';
+                if (details.includes('429')) {
+                    throw new Error(`Gemini proxy quota exceeded (429). Configure billing/higher quota or set VITE_GEMINI_API_KEY as direct fallback. ${details}`);
+                }
                 throw new Error(`Gemini proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
             }
         }
@@ -136,6 +139,9 @@ async function generateImageWithGemini(prompt: string, signal?: AbortSignal): Pr
         } catch (proxyError) {
             if (!API_KEY) {
                 const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy image error';
+                if (details.includes('429')) {
+                    throw new Error(`Gemini image proxy quota exceeded (429). Configure billing/higher quota or set VITE_GEMINI_API_KEY as direct fallback. ${details}`);
+                }
                 throw new Error(`Gemini image proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
             }
         }
@@ -330,8 +336,10 @@ export async function generateAIImage(
     if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
 
     try {
-        // First enhance the prompt if DNA is provided
-        const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
+        // Avoid extra text-model calls per frame (can exhaust free quota quickly).
+        const finalPrompt = dna?.trim()
+            ? `Project DNA:\n${dna}\n\nScene:\n${description}\n\nGenerate a cinematic storyboard frame image that matches the DNA.`
+            : description;
         throwIfAborted(signal);
         
         return await withAbort(() => generateImageWithGemini(finalPrompt, signal), signal);

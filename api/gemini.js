@@ -1,5 +1,5 @@
-const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
-const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-preview-image-generation';
+const GEMINI_TEXT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const GEMINI_IMAGE_MODELS = ['gemini-2.0-flash-preview-image-generation'];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const model = type === 'image' ? GEMINI_IMAGE_MODEL : GEMINI_TEXT_MODEL;
+    const models = type === 'image' ? GEMINI_IMAGE_MODELS : GEMINI_TEXT_MODELS;
     const body =
       type === 'image'
         ? {
@@ -50,18 +50,35 @@ export default async function handler(req, res) {
             ],
           };
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    );
+    let data = null;
+    let response = null;
+    let lastStatus = 500;
+    let lastError = { error: 'Gemini proxy failed before request' };
 
-    const data = await response.json();
-    if (!response.ok) {
-      res.status(response.status).json(data);
+    for (const model of models) {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+
+      data = await response.json();
+      if (response.ok) break;
+
+      lastStatus = response.status;
+      lastError = data;
+      // Try next model only on quota errors.
+      if (response.status !== 429) break;
+    }
+
+    if (!response?.ok) {
+      res.status(lastStatus).json({
+        ...lastError,
+        attemptedModels: models,
+      });
       return;
     }
 
