@@ -1,23 +1,9 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
+const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-preview-image-generation';
 const RAW_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const API_KEY = RAW_API_KEY && RAW_API_KEY !== 'undefined' && RAW_API_KEY !== 'null' ? RAW_API_KEY : '';
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL || (!API_KEY ? '/api/gemini' : '');
 const FORCE_IMAGE_FALLBACK = import.meta.env.VITE_FORCE_IMAGE_FALLBACK === 'true';
-let imageModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
-
-function getImageModel() {
-    if (!API_KEY) {
-        throw new Error('Missing VITE_GEMINI_API_KEY. Configure it, or force fallback images with VITE_FORCE_IMAGE_FALLBACK=true.');
-    }
-    if (!imageModel) {
-        const client = new GoogleGenerativeAI(API_KEY);
-        // Using imagen-3.0-generate-001 for image generation
-        imageModel = client.getGenerativeModel({ model: "imagen-3.0-generate-001" });
-    }
-    return imageModel;
-}
 
 export interface AIScriptResult {
     text: string;
@@ -119,6 +105,55 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
     return await directGeminiText(prompt, signal);
 }
 
+async function generateImageWithGemini(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (!API_KEY) {
+        throw new Error('Missing VITE_GEMINI_API_KEY for image generation.');
+    }
+
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${API_KEY}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [{ text: prompt }],
+                    },
+                ],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                },
+            }),
+            signal,
+        }
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini image API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const candidates = data?.candidates ?? [];
+    for (const candidate of candidates) {
+        const parts = candidate?.content?.parts ?? [];
+        for (const part of parts) {
+            const inlineData = part?.inlineData;
+            if (
+                inlineData?.data &&
+                typeof inlineData.mimeType === 'string' &&
+                inlineData.mimeType.startsWith('image/')
+            ) {
+                return `data:${inlineData.mimeType};base64,${inlineData.data}`;
+            }
+        }
+    }
+
+    throw new Error('Gemini image model returned no image data.');
+}
+
 function createFallbackImage(description: string, index: number): string {
     const safeText = (description || `Frame ${index + 1}`)
         .replace(/\s+/g, ' ')
@@ -142,7 +177,7 @@ function createFallbackImage(description: string, index: number): string {
   <rect width="1280" height="720" fill="url(#bg)"/>
   <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="#27272a" stroke-width="2"/>
   <text x="80" y="140" fill="#10b981" font-size="36" font-family="Inter, Arial, sans-serif" font-weight="700">
-    StoriAI Placeholder
+    StoryAI Placeholder
   </text>
   <text x="80" y="200" fill="#a1a1aa" font-size="28" font-family="Inter, Arial, sans-serif">
     Frame ${index + 1}
@@ -265,24 +300,7 @@ export async function generateAIImage(
         const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
         throwIfAborted(signal);
         
-        // Use the image model
-        // Note: In some SDK versions, generation might be different. 
-        // We'll wrap it in a way that attempts a standard generation call.
-        const result = await withAbort(() => getImageModel().generateContent(finalPrompt), signal);
-        const response = await result.response;
-        throwIfAborted(signal);
-        
-        // Handle image data in response
-        const part = response.candidates?.[0]?.content?.parts?.[0];
-        if (part?.inlineData) {
-            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-        
-        // If the above fails, check if text was returned instead (some models return image URLs or paths)
-        const textResponse = response.text();
-        if (textResponse.startsWith('http')) {
-            return textResponse;
-        }
+        return await withAbort(() => generateImageWithGemini(finalPrompt, signal), signal);
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') throw error;
         console.error("AI Image Generation failed:", error);
