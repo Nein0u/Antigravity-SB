@@ -64,7 +64,7 @@ const FrameModal: React.FC<FrameModalProps> = ({ frame, onClose, onUpdatePrompt 
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Fernando-Frame-${frame.index + 1}.jpg`;
+            link.download = `StoryAI-Frame-${frame.index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

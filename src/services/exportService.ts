@@ -32,7 +32,7 @@ export async function downloadComposite(frames: StoryboardFrame[], title: string
     // Header
     ctx.fillStyle = '#10b981'; // Emerald-400
     ctx.font = 'bold 40px Inter, sans-serif';
-    ctx.fillText('FERNANDO | COMPOSITE CONTACT SHEET', PADDING, PADDING + 30);
+    ctx.fillText('STORYAI | COMPOSITE CONTACT SHEET', PADDING, PADDING + 30);
     
     ctx.fillStyle = '#a1a1aa'; // Zinc-400
     ctx.font = '24px Inter, sans-serif';

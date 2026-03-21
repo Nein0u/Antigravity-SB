@@ -56,7 +56,7 @@ function App() {
               <Clapperboard size={20} className="text-emerald-400" />
             </div>
             <div>
-              <h2 className="header-title">Fernando</h2>
+              <h2 className="header-title">StoryAI</h2>
               <p className="header-sub">Visual storytelling powered by artificial intelligence</p>
             </div>
           </div>
