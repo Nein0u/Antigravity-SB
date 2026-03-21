@@ -93,7 +93,7 @@ export async function downloadComposite(frames: StoryboardFrame[], title: string
 /**
  * Downloads the storyboard data as a JSON file.
  */
-export function downloadJSON(data: any, title: string = 'storyboard-project') {
+export function downloadJSON<T>(data: T, title: string = 'storyboard-project') {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
