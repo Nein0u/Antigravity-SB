@@ -87,6 +87,30 @@ async function proxyGeminiText(prompt: string, signal?: AbortSignal): Promise<st
     return data.text;
 }
 
+async function proxyGeminiImage(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (!PROXY_URL) {
+        throw new Error('Gemini image proxy URL is not configured.');
+    }
+
+    const response = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, type: 'image' }),
+        signal,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Proxy Gemini image error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (!data?.imageData || typeof data.imageData !== 'string') {
+        throw new Error('Proxy Gemini image response did not include imageData.');
+    }
+    return data.imageData;
+}
+
 async function generateText(prompt: string, signal?: AbortSignal): Promise<string> {
     throwIfAborted(signal);
     if (PROXY_URL) {
@@ -106,6 +130,17 @@ async function generateText(prompt: string, signal?: AbortSignal): Promise<strin
 }
 
 async function generateImageWithGemini(prompt: string, signal?: AbortSignal): Promise<string> {
+    if (PROXY_URL) {
+        try {
+            return await proxyGeminiImage(prompt, signal);
+        } catch (proxyError) {
+            if (!API_KEY) {
+                const details = proxyError instanceof Error ? proxyError.message : 'Unknown proxy image error';
+                throw new Error(`Gemini image proxy request failed and no VITE_GEMINI_API_KEY is available. ${details}`);
+            }
+        }
+    }
+
     if (!API_KEY) {
         throw new Error('Missing VITE_GEMINI_API_KEY for image generation.');
     }
@@ -292,7 +327,6 @@ export async function generateAIImage(
     signal?: AbortSignal
 ): Promise<string> {
     throwIfAborted(signal);
-    if (!API_KEY) return createFallbackImage(description, index);
     if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
 
     try {
