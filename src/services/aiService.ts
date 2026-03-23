@@ -258,7 +258,6 @@ export async function generateAIScript(
             frames
         };
     } else {
-        // Generate a script from an idea
         const prompt = `
             You are a professional storyboard artist and screenwriter.
             The user has an idea for a story. 
@@ -317,7 +316,12 @@ export async function enhanceAIPrompt(description: string, dna: string = '', sig
         Focus on: cinematic lighting, camera angle, lens type (e.g., 35mm, anamorphic), 
         and specifically ensuring characters match the DNA description perfectly.
         Return ONLY the enhanced prompt.
-    export async function generateAIImage(
+    `;
+    
+    return (await generateText(prompt, signal)).trim();
+}
+
+export async function generateAIImage(
     description: string,
     index: number,
     dna: string = '',
