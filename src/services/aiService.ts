@@ -317,16 +317,7 @@ export async function enhanceAIPrompt(description: string, dna: string = '', sig
         Focus on: cinematic lighting, camera angle, lens type (e.g., 35mm, anamorphic), 
         and specifically ensuring characters match the DNA description perfectly.
         Return ONLY the enhanced prompt.
-    `;
-    
-    return (await generateText(prompt, signal)).trim();
-}
-
-/**
- * Generates an image using Gemini/Imagen.
- * Falls back to placeholder if generation fails for better stability during evaluation.
- */
-export async function generateAIImage(
+    export async function generateAIImage(
     description: string,
     index: number,
     dna: string = '',
@@ -334,26 +325,19 @@ export async function generateAIImage(
 ): Promise<string> {
     throwIfAborted(signal);
     if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
+    if (!API_KEY && !PROXY_URL) return createFallbackImage(description, index);
 
     try {
-        // Avoid extra text-model calls per frame (can exhaust free quota quickly).
         const finalPrompt = dna?.trim()
             ? `Project DNA:\n${dna}\n\nScene:\n${description}\n\nGenerate a cinematic storyboard frame image that matches the DNA.`
             : description;
-    if (!API_KEY) return createFallbackImage(description, index);
-    if (FORCE_IMAGE_FALLBACK) return createFallbackImage(description, index);
 
-    try {
-        // First enhance the prompt if DNA is provided
-        const finalPrompt = dna ? await enhanceAIPrompt(description, dna, signal) : description;
         throwIfAborted(signal);
-        
         return await withAbort(() => generateImageWithGemini(finalPrompt, signal), signal);
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') throw error;
         console.error("AI Image Generation failed:", error);
     }
 
-    // Local SVG fallback to avoid third-party hotlink/CORS/rate-limit failures in production.
     return createFallbackImage(description, index);
 }
